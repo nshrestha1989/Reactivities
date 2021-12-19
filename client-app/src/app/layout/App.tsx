@@ -5,18 +5,25 @@ import { Activity } from "../models/Activity";
 import NavBar from "./NavBar";
 import ActivityDashboard from "../../features/activities/dashboard/ActivityDashboard";
 import {v4 as uuid} from 'uuid';
+import agent from "../api/agent";
+import LoadingComponent from "./LoadingCompnents";
 
 function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<Activity|undefined>(undefined)
   const[editMode,setEditMode]=useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting , setSubmiiting] = useState(false)
 
   useEffect(() => {
-    axios
-      .get<Activity[]>("http://localhost:5000/api/activities")
-      .then((response) => {
-        console.log(response);
-        setActivities(response.data);
+    agent.Activities.list().then((response) => {
+      let activities:Activity[]=[];
+      response.forEach(activity=>{
+        activity.date=activity.date.split('T')[0];
+        activities.push(activity);
+      })
+         setActivities(activities);
+         setLoading(false);
       });
   }, []);
 
@@ -39,16 +46,36 @@ function App() {
   }
 
   function handleCreateorEditActivity(activity:Activity) {
-    activity.id?setActivities([...activities.filter(x=>x.id !==activity.id),activity])
-    :setActivities([...activities,{...activity,id:uuid()}]);
-    setEditMode(false);
-    setSelectedActivity(activity);
+    setSubmiiting(true);
+    if(activity.id){
+      agent.Activities.update(activity).then(()=>{
+        setActivities([...activities.filter(x=>x.id !==activity.id),activity])
+        setSelectedActivity(activity);
+        setEditMode(false);
+        setSubmiiting(false);
+      })
+    }else{
+      activity.id=uuid();
+      agent.Activities.create(activity).then(()=>{
+        setActivities([...activities,activity]);
+        setSelectedActivity(activity);
+        setEditMode(false);
+        setSubmiiting(false);
+      })
+
+    }
       }
 
   function handleDeleteActivity(id :string) {
-    setActivities([...activities.filter(x=>x.id !==id)])
+    setSubmiiting(true);
+    agent.Activities.delete(id).then(()=>{
+      setActivities([...activities.filter(x=>x.id !==id)]);
+      setSubmiiting(false);
+    });
+  
     
   }
+  if(loading) return<LoadingComponent content='Loading app' />
   return (
     <Fragment>
       <NavBar openForm={handleFormOpen} />
@@ -63,6 +90,7 @@ function App() {
       closeForm={handleFormClose}
       createOrEdit={handleCreateorEditActivity}
       deleteActivity={handleDeleteActivity}
+      submitting={submitting}
       />
       </Container>
     </Fragment>
